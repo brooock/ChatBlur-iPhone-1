@@ -16,7 +16,8 @@ ChatBlur findet frei eingegebene Schlagwörter (Namen, Telefonnummern, Firmen) i
 
 ## Funktionen
 
-- Video aus „Fotos“ oder „Dateien“ wählen (MP4/MOV). Es wird eine Kopie bearbeitet, das Original nie verändert.
+- Video (MP4/MOV) oder Foto (HEIC/JPEG/PNG) aus „Fotos“ oder „Dateien“ wählen. Es wird eine Kopie bearbeitet, das Original nie verändert.
+- Fotos: einmalige Texterkennung in voller Auflösung, Export als JPEG ohne Standort- und Aufnahmedaten.
 - Mehrere Schlagwörter (pro Zeile oder mit Komma getrennt).
 - Texterkennung mit Apple Vision auf Deutsch + Englisch, direkt auf dem Gerät.
 - Matching: Groß-/Kleinschreibung, Umlaute/Akzente, Satzzeichen und Mehrfach-Leerzeichen werden ignoriert.

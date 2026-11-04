@@ -4,10 +4,20 @@ import AVKit
 import Photos
 import UniformTypeIdentifiers
 
+private enum MediaKind: Equatable {
+    case video
+    case photo
+}
+
+private struct SelectedMedia {
+    let url: URL
+    let kind: MediaKind
+}
+
 struct ContentView: View {
     @StateObject private var processor = VideoProcessor()
     @State private var photoSelection: PhotosPickerItem?
-    @State private var selectedVideoURL: URL?
+    @State private var selectedMedia: SelectedMedia?
     @State private var keywordText = ""
     @State private var sampleInterval = 0.12
     @State private var blurRadius = 18.0
@@ -46,11 +56,11 @@ struct ContentView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
-                    videoPickerSection
+                    mediaPickerSection
                     keywordSection
                     settingsSection
                     processSection
-                    if processor.result != nil { reviewSection }
+                    if processor.result != nil || processor.imageResult != nil { reviewSection }
                     privacyNote
                     footer
                 }
@@ -64,7 +74,7 @@ struct ContentView: View {
             .scrollDismissesKeyboard(.interactively)
             .fileImporter(
                 isPresented: $isFileImporterPresented,
-                allowedContentTypes: [.movie, .mpeg4Movie, .quickTimeMovie],
+                allowedContentTypes: [.movie, .mpeg4Movie, .quickTimeMovie, .image],
                 allowsMultipleSelection: false,
                 onCompletion: handleFileImport
             )
@@ -75,6 +85,10 @@ struct ContentView: View {
             .onChange(of: processor.result?.outputURL) { url in
                 player?.pause()
                 player = url.map { AVPlayer(url: $0) }
+                hasReviewedResult = false
+                saveMessage = nil
+            }
+            .onChange(of: processor.imageResult?.outputURL) { _ in
                 hasReviewedResult = false
                 saveMessage = nil
             }
@@ -106,7 +120,7 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("Für WhatsApp-Chats und andere Bildschirmvideos – auch wenn der Inhalt scrollt.")
+            Text("Für WhatsApp-Chats und andere Bildschirmvideos – auch wenn der Inhalt scrollt. Fotos von Chats funktionieren genauso.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.top, 2)
@@ -116,19 +130,19 @@ struct ContentView: View {
         .background(.background, in: RoundedRectangle(cornerRadius: 18))
     }
 
-    private var videoPickerSection: some View {
+    private var mediaPickerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("1", "Video auswählen")
+            sectionTitle("1", "Video oder Foto auswählen")
 
-            if let selectedVideoURL {
+            if let selectedMedia {
                 HStack(spacing: 12) {
-                    Image(systemName: "film.fill")
+                    Image(systemName: selectedMedia.kind == .photo ? "photo.fill" : "film.fill")
                         .font(.title2)
                         .foregroundStyle(.teal)
                         .frame(width: 42, height: 42)
                         .background(.teal.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(displayName(for: selectedVideoURL))
+                        Text(displayName(for: selectedMedia.url))
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(2)
                         Text("Kopie bereit zur Analyse – das Original bleibt unverändert")
@@ -137,21 +151,21 @@ struct ContentView: View {
                     }
                     Spacer(minLength: 0)
                     Button {
-                        removeSelectedVideo()
+                        removeSelectedMedia()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(.secondary)
                             .font(.title3)
                     }
-                    .accessibilityLabel("Video entfernen")
+                    .accessibilityLabel("Datei entfernen")
                     .disabled(processor.isProcessing)
                 }
                 .padding(12)
                 .background(.background, in: RoundedRectangle(cornerRadius: 12))
             }
 
-            PhotosPicker(selection: $photoSelection, matching: .videos, photoLibrary: .shared()) {
-                Label("Video aus Fotos wählen", systemImage: "photo.on.rectangle.angled")
+            PhotosPicker(selection: $photoSelection, matching: .any(of: [.videos, .images]), photoLibrary: .shared()) {
+                Label("Aus Fotos wählen", systemImage: "photo.on.rectangle.angled")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -160,14 +174,14 @@ struct ContentView: View {
             Button {
                 isFileImporterPresented = true
             } label: {
-                Label("Video aus Dateien wählen", systemImage: "folder")
+                Label("Aus Dateien wählen", systemImage: "folder")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .disabled(isImporting || processor.isProcessing)
 
             if isImporting {
-                ProgressView("Video wird vorbereitet …")
+                ProgressView("Datei wird vorbereitet …")
                     .font(.caption)
             }
         }
@@ -205,19 +219,21 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 14) {
             sectionTitle("3", "Verarbeitung einstellen")
 
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Scan-Häufigkeit")
-                    .font(.subheadline.weight(.semibold))
-                Picker("Scan-Häufigkeit", selection: $sampleInterval) {
-                    ForEach(scanOptions) { option in
-                        Text(option.title).tag(option.seconds)
+            if selectedMedia?.kind != .photo {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Scan-Häufigkeit")
+                        .font(.subheadline.weight(.semibold))
+                    Picker("Scan-Häufigkeit", selection: $sampleInterval) {
+                        ForEach(scanOptions) { option in
+                            Text(option.title).tag(option.seconds)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .disabled(processor.isProcessing)
+                    Text("Wie oft das Video nach Text durchsucht wird. Häufiger = sicherer bei schnellem Scrollen, aber langsamer. Gilt nur für Videos.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.menu)
-                .disabled(processor.isProcessing)
-                Text("Wie oft das Video nach Text durchsucht wird. Häufiger = sicherer bei schnellem Scrollen, aber langsamer.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Toggle(isOn: $tolerateOCRErrors) {
@@ -270,16 +286,19 @@ struct ContentView: View {
                 Button {
                     startProcessing()
                 } label: {
-                    Label("Blur anwenden und Video erstellen", systemImage: "wand.and.stars")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
+                    Label(
+                        selectedMedia?.kind == .photo ? "Blur anwenden und Foto erstellen" : "Blur anwenden und Video erstellen",
+                        systemImage: "wand.and.stars"
+                    )
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(selectedVideoURL == nil || keywords.isEmpty || isImporting)
+                .disabled(selectedMedia == nil || keywords.isEmpty || isImporting)
             }
 
-            if processor.isProcessing || processor.result != nil || processor.status == "Abgebrochen" {
+            if processor.isProcessing || processor.result != nil || processor.imageResult != nil || processor.status == "Abgebrochen" {
                 VStack(alignment: .leading, spacing: 8) {
                     ProgressView(value: processor.progress)
                     Text(processor.status)
@@ -323,28 +342,71 @@ struct ContentView: View {
                         .font(.footnote)
                 }
 
-                ShareLink(item: MovieTransferable(url: result.outputURL), preview: SharePreview("ChatBlur-Video")) {
-                    Label("Teilen / in Dateien sichern", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!hasReviewedResult)
-
-                Button {
-                    Task { await saveToPhotos(result.outputURL) }
-                } label: {
-                    Label(isSaving ? "Wird gesichert …" : "In Fotos sichern", systemImage: "photo.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .disabled(!hasReviewedResult || isSaving)
-
-                if let saveMessage {
-                    Text(saveMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                shareButton(url: result.outputURL)
+                saveToPhotosButton(url: result.outputURL)
+                saveMessageView
             }
+        } else if let result = processor.imageResult {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("5", "Ergebnis prüfen & teilen")
+
+                if let image = UIImage(contentsOfFile: result.outputURL.path) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
+                imageHitList(result)
+
+                Toggle(isOn: $hasReviewedResult) {
+                    Text("Ich habe das ganze Bild angesehen. Automatische Erkennung kann Stellen übersehen.")
+                        .font(.footnote)
+                }
+
+                shareButton(url: result.outputURL)
+                saveToPhotosButton(url: result.outputURL)
+                saveMessageView
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func shareButton(url: URL) -> some View {
+        if url.pathExtension.lowercased() == "jpg" {
+            ShareLink(item: url, preview: SharePreview("ChatBlur-Foto")) {
+                Label("Teilen / in Dateien sichern", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!hasReviewedResult)
+        } else {
+            ShareLink(item: MovieTransferable(url: url), preview: SharePreview("ChatBlur-Video")) {
+                Label("Teilen / in Dateien sichern", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!hasReviewedResult)
+        }
+    }
+
+    private func saveToPhotosButton(url: URL) -> some View {
+        Button {
+            Task { await saveToPhotos(url) }
+        } label: {
+            Label(isSaving ? "Wird gesichert …" : "In Fotos sichern", systemImage: "photo.badge.plus")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .disabled(!hasReviewedResult || isSaving)
+    }
+
+    @ViewBuilder
+    private var saveMessageView: some View {
+        if let saveMessage {
+            Text(saveMessage)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -397,6 +459,38 @@ struct ContentView: View {
         }
     }
 
+    private func imageHitList(_ result: ImageResult) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            let uncertainCount = result.hits.filter(\.isUncertain).count
+            Text("\(result.hits.count) Fundstelle(n) · \(uncertainCount) unsicher")
+                .font(.subheadline.weight(.semibold))
+
+            if result.hits.isEmpty {
+                Label("Kein Schlagwort gefunden. Prüfe die Schreibweise und das Bild genau.", systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+
+            ForEach(result.hits) { hit in
+                HStack(spacing: 10) {
+                    Image(systemName: hit.isUncertain ? "questionmark.circle.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(hit.isUncertain ? .orange : .teal)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("„\(hit.keyword)“")
+                            .font(.subheadline)
+                        Text(imageHitDescription(hit))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .background(.background, in: RoundedRectangle(cornerRadius: 10))
+            }
+        }
+    }
+
     private var privacyNote: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "lock.iphone")
@@ -404,7 +498,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Lokal auf dem iPhone – keine Garantie auf Vollständigkeit")
                     .font(.subheadline.weight(.semibold))
-                Text("Die Analyse läuft komplett auf dem Gerät, nichts wird hochgeladen. Verwischt wird die ganze erkannte Textzeile. Texterkennung kann Stellen übersehen – besonders bei sehr schnellem Scrollen, kleiner Schrift oder kurzen Einblendungen. Das Original wird nie verändert.")
+                Text("Die Analyse läuft komplett auf dem Gerät, nichts wird hochgeladen. Verwischt wird die ganze erkannte Textzeile. Texterkennung kann Stellen übersehen – besonders bei sehr schnellem Scrollen, kleiner Schrift oder kurzen Einblendungen. Das Original wird nie verändert. Fotos werden ohne Standort- und Aufnahmedaten exportiert.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -440,19 +534,21 @@ struct ContentView: View {
     }
 
     private func startProcessing() {
-        guard let selectedVideoURL else { return }
+        guard let selectedMedia else { return }
         player?.pause()
         player = nil
-        processor.start(
-            inputURL: selectedVideoURL,
-            keywords: keywords,
-            settings: ProcessingSettings(
-                sampleInterval: sampleInterval,
-                blurStrength: blurRadius,
-                allowPartialWords: allowPartialWords,
-                tolerateOCRErrors: tolerateOCRErrors
-            )
+        let settings = ProcessingSettings(
+            sampleInterval: sampleInterval,
+            blurStrength: blurRadius,
+            allowPartialWords: allowPartialWords,
+            tolerateOCRErrors: tolerateOCRErrors
         )
+        switch selectedMedia.kind {
+        case .video:
+            processor.start(inputURL: selectedMedia.url, keywords: keywords, settings: settings)
+        case .photo:
+            processor.startImage(inputURL: selectedMedia.url, keywords: keywords, settings: settings)
+        }
     }
 
     private func hitDescription(_ hit: HitSummary) -> String {
@@ -460,6 +556,14 @@ struct ContentView: View {
         if hit.containsFuzzyMatch { parts.append("ähnliche Schreibweise") }
         if hit.minConfidence < 0.5 { parts.append("niedrige OCR-Sicherheit") }
         if hit.observationCount == 1 { parts.append("nur kurz sichtbar") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func imageHitDescription(_ hit: ImageHitSummary) -> String {
+        var parts: [String] = []
+        if hit.isFuzzy { parts.append("ähnliche Schreibweise") }
+        if hit.confidence < 0.5 { parts.append("niedrige OCR-Sicherheit") }
+        if parts.isEmpty { parts.append("eindeutig erkannt") }
         return parts.joined(separator: " · ")
     }
 
@@ -481,18 +585,18 @@ struct ContentView: View {
         return name
     }
 
-    private func removeSelectedVideo() {
-        if let url = selectedVideoURL { try? FileManager.default.removeItem(at: url) }
-        selectedVideoURL = nil
+    private func removeSelectedMedia() {
+        if let url = selectedMedia?.url { try? FileManager.default.removeItem(at: url) }
+        selectedMedia = nil
         photoSelection = nil
         player?.pause()
         player = nil
         processor.reset()
     }
 
-    private func setSelectedVideo(_ url: URL) {
-        if let old = selectedVideoURL, old != url { try? FileManager.default.removeItem(at: old) }
-        selectedVideoURL = url
+    private func setSelectedMedia(_ media: SelectedMedia) {
+        if let old = selectedMedia?.url, old != media.url { try? FileManager.default.removeItem(at: old) }
+        selectedMedia = media
         player?.pause()
         player = nil
         processor.reset()
@@ -507,11 +611,18 @@ struct ContentView: View {
             saveMessage = "Kein Zugriff auf Fotos. Bitte in Einstellungen › ChatBlur › Fotos erlauben oder „Teilen“ verwenden."
             return
         }
+        let isImage = url.pathExtension.lowercased() == "jpg"
         do {
             try await PHPhotoLibrary.shared().performChanges {
-                _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                if isImage {
+                    _ = PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url)
+                } else {
+                    _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                }
             }
-            saveMessage = "Als neues Video in Fotos gesichert. Das Original ist unverändert."
+            saveMessage = isImage
+                ? "Als neues Foto in Fotos gesichert. Das Original ist unverändert."
+                : "Als neues Video in Fotos gesichert. Das Original ist unverändert."
         } catch {
             saveMessage = "Sichern fehlgeschlagen: \(error.localizedDescription)"
         }
@@ -522,12 +633,24 @@ struct ContentView: View {
         isImporting = true
         defer { isImporting = false }
         do {
-            guard let movie = try await item.loadTransferable(type: MovieTransferable.self) else {
-                throw ImportProblem.couldNotReadVideo
+            let imageType = item.supportedContentTypes.first { $0.conforms(to: .image) }
+            if let imageType {
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    throw ImportProblem.noFileDelivered
+                }
+                let ext = imageType.preferredFilenameExtension ?? "img"
+                let destination = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("ChatBlur-import-\(UUID().uuidString)-Foto.\(ext)")
+                try data.write(to: destination, options: .atomic)
+                setSelectedMedia(SelectedMedia(url: destination, kind: .photo))
+            } else {
+                guard let movie = try await item.loadTransferable(type: MovieTransferable.self) else {
+                    throw ImportProblem.noFileDelivered
+                }
+                setSelectedMedia(SelectedMedia(url: movie.url, kind: .video))
             }
-            setSelectedVideo(movie.url)
         } catch {
-            importError = "Das Video konnte nicht aus Fotos geladen werden. Bitte versuche es über „Dateien wählen“. Details: \(error.localizedDescription)"
+            importError = "Die Datei konnte nicht aus Fotos geladen werden. Bitte versuche es über „Aus Dateien wählen“. Details: \(error.localizedDescription)"
         }
     }
 
@@ -538,10 +661,12 @@ struct ContentView: View {
             do {
                 let hasAccess = pickedURL.startAccessingSecurityScopedResource()
                 defer { if hasAccess { pickedURL.stopAccessingSecurityScopedResource() } }
+                let isImage = (try? pickedURL.resourceValues(forKeys: [.contentTypeKey]).contentType)?
+                    .conforms(to: .image) ?? false
                 let destination = FileManager.default.temporaryDirectory
                     .appendingPathComponent("ChatBlur-import-\(UUID().uuidString)-\(pickedURL.lastPathComponent)")
                 try FileManager.default.copyItem(at: pickedURL, to: destination)
-                setSelectedVideo(destination)
+                setSelectedMedia(SelectedMedia(url: destination, kind: isImage ? .photo : .video))
             } catch {
                 importError = "Die Datei konnte nicht kopiert werden: \(error.localizedDescription)"
             }
@@ -551,7 +676,7 @@ struct ContentView: View {
     }
 
     private enum ImportProblem: LocalizedError {
-        case couldNotReadVideo
-        var errorDescription: String? { "Es wurde keine Videodatei geliefert." }
+        case noFileDelivered
+        var errorDescription: String? { "Es wurde keine Datei geliefert." }
     }
 }

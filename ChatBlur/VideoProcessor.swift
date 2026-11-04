@@ -38,6 +38,22 @@ struct ProcessingResult: Sendable {
     let videoDuration: Double
 }
 
+/// One keyword found on a still image. Photos have no scrolling, so there is no time range.
+struct ImageHitSummary: Identifiable, Sendable {
+    let id: Int
+    let keyword: String
+    let isFuzzy: Bool
+    let confidence: Float
+
+    var isUncertain: Bool { confidence < 0.5 || isFuzzy }
+}
+
+struct ImageResult: Sendable {
+    /// JPEG file in the exports folder. Metadata of the original photo is not carried over.
+    let outputURL: URL
+    let hits: [ImageHitSummary]
+}
+
 // MARK: - Internal data types
 
 private struct KeywordHit: Sendable {
@@ -115,6 +131,7 @@ private struct BoxTrack: Sendable {
 
 private enum ProcessingError: LocalizedError {
     case invalidVideo
+    case invalidImage
     case noVideoTrack
     case noKeywords
     case notEnoughStorage(neededMB: Int64, availableMB: Int64)
@@ -125,6 +142,8 @@ private enum ProcessingError: LocalizedError {
         switch self {
         case .invalidVideo:
             return "Die Videodatei hat keine gültige Länge oder konnte nicht gelesen werden."
+        case .invalidImage:
+            return "Das Bild konnte nicht gelesen werden. Bitte wähle ein anderes Foto."
         case .noVideoTrack:
             return "In der Datei wurde keine Videospur gefunden."
         case .noKeywords:
@@ -149,6 +168,7 @@ final class VideoProcessor: ObservableObject {
     @Published private(set) var progress = 0.0
     @Published private(set) var status = "Bereit"
     @Published private(set) var result: ProcessingResult?
+    @Published private(set) var imageResult: ImageResult?
     @Published private(set) var errorMessage: String?
 
     private var processingTask: Task<Void, Never>?
@@ -158,7 +178,9 @@ final class VideoProcessor: ObservableObject {
         progress = 0
         status = "Bereit"
         if let old = result?.outputURL { try? FileManager.default.removeItem(at: old) }
+        if let old = imageResult?.outputURL { try? FileManager.default.removeItem(at: old) }
         result = nil
+        imageResult = nil
         errorMessage = nil
     }
 
@@ -205,6 +227,51 @@ final class VideoProcessor: ObservableObject {
                     self.result = output
                     self.progress = 1
                     self.status = "Fertig. Bitte das Ergebnis vollständig ansehen, bevor du es teilst."
+                    self.finishProcessing()
+                }
+            } catch {
+                let cancelled = error is CancellationError || Task.isCancelled
+                let message = Self.friendlyMessage(for: error)
+                await MainActor.run {
+                    guard let self else { return }
+                    if cancelled {
+                        self.status = "Abgebrochen"
+                        self.progress = 0
+                    } else {
+                        self.errorMessage = message
+                        self.status = "Verarbeitung fehlgeschlagen"
+                    }
+                    self.finishProcessing()
+                }
+            }
+        }
+    }
+
+    func startImage(inputURL: URL, keywords: [String], settings: ProcessingSettings) {
+        guard !isProcessing else { return }
+        let matcher = KeywordMatcher(
+            keywords: keywords,
+            allowPartialWords: settings.allowPartialWords,
+            tolerateOCRErrors: settings.tolerateOCRErrors
+        )
+        guard !matcher.isEmpty else {
+            errorMessage = ProcessingError.noKeywords.errorDescription
+            return
+        }
+
+        reset()
+        isProcessing = true
+        status = "Bild wird vorbereitet …"
+        UIApplication.shared.isIdleTimerDisabled = true
+
+        processingTask = Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let output = try await Self.processImage(inputURL: inputURL, matcher: matcher, settings: settings)
+                await MainActor.run {
+                    guard let self else { return }
+                    self.imageResult = output
+                    self.progress = 1
+                    self.status = "Fertig. Bitte das Bild vollständig ansehen, bevor du es teilst."
                     self.finishProcessing()
                 }
             } catch {
@@ -449,6 +516,89 @@ final class VideoProcessor: ObservableObject {
             failedFrames: failedFrames,
             videoDuration: duration
         )
+    }
+
+    // MARK: Still images
+
+    nonisolated private static func processImage(
+        inputURL: URL,
+        matcher: KeywordMatcher,
+        settings: ProcessingSettings
+    ) async throws -> ImageResult {
+        try checkFreeStorage(for: inputURL)
+        guard let data = try? Data(contentsOf: inputURL), let uiImage = UIImage(data: data) else {
+            throw ProcessingError.invalidImage
+        }
+
+        // Normalise orientation and cap the size. Rendering into a fresh bitmap also means the
+        // exported JPEG carries no EXIF data or location from the original photo.
+        let maxSide: CGFloat = 3000
+        let fitScale = min(1, maxSide / max(uiImage.size.width, uiImage.size.height))
+        let target = CGSize(
+            width: (uiImage.size.width * fitScale).rounded(),
+            height: (uiImage.size.height * fitScale).rounded()
+        )
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let normalized = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+            uiImage.draw(in: CGRect(origin: .zero, size: target))
+        }
+        guard let cgImage = normalized.cgImage else { throw ProcessingError.invalidImage }
+
+        // OCR at full resolution, so small chat text stays readable.
+        try Task.checkCancellation()
+        let languages = supportedLanguages()
+        let hits = try autoreleasepool {
+            try detectHits(in: cgImage, matcher: matcher, languages: languages)
+        }
+        try Task.checkCancellation()
+
+        // Same masking as for videos, applied to the detected text lines only.
+        let width = CGFloat(cgImage.width)
+        let height = CGFloat(cgImage.height)
+        let extent = CGRect(x: 0, y: 0, width: width, height: height)
+        let strength = max(4.0, settings.blurStrength) * max(1, width / 1080)
+        let source = CIImage(cgImage: cgImage)
+        let obscured = source
+            .clampedToExtent()
+            .applyingFilter("CIPixellate", parameters: [
+                kCIInputScaleKey: strength * 0.9,
+                kCIInputCenterKey: CIVector(x: 0, y: 0)
+            ])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: strength * 0.6])
+
+        var output = source
+        for hit in hits {
+            let rect = CGRect(
+                x: hit.rect.minX * width,
+                y: hit.rect.minY * height,
+                width: hit.rect.width * width,
+                height: hit.rect.height * height
+            )
+            let padded = rect.insetBy(
+                dx: -max(8, rect.width * 0.05),
+                dy: -max(6, rect.height * 0.30)
+            ).intersection(extent)
+            guard !padded.isNull, !padded.isEmpty else { continue }
+            output = obscured.cropped(to: padded).composited(over: output)
+        }
+
+        let context = CIContext()
+        guard let rendered = context.createCGImage(output.cropped(to: extent), from: extent),
+              let jpeg = UIImage(cgImage: rendered).jpegData(compressionQuality: 0.92) else {
+            throw ProcessingError.exportFailed(nil)
+        }
+
+        let exportsDir = exportsDirectory
+        try FileManager.default.createDirectory(at: exportsDir, withIntermediateDirectories: true)
+        let outputURL = exportsDir.appendingPathComponent("ChatBlur-Foto-\(Int(Date().timeIntervalSince1970)).jpg")
+        try jpeg.write(to: outputURL, options: .atomic)
+
+        let summaries = hits.enumerated().map { index, hit in
+            ImageHitSummary(id: index, keyword: hit.keyword, isFuzzy: hit.isFuzzy, confidence: hit.confidence)
+        }
+        return ImageResult(outputURL: outputURL, hits: summaries)
     }
 
     nonisolated private static func checkFreeStorage(for inputURL: URL) throws {
