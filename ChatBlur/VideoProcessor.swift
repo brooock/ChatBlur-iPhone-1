@@ -47,6 +47,55 @@ private struct KeywordHit: Sendable {
     let keyword: String
 }
 
+/// Tiny grayscale thumbnail of a frame, used to detect whether anything on screen changed.
+private struct FrameFingerprint {
+    static let width = 36
+    static let height = 78
+    let pixels: [UInt8]
+
+    init?(_ image: CGImage) {
+        var buffer = [UInt8](repeating: 0, count: Self.width * Self.height)
+        let drawn: Bool = buffer.withUnsafeMutableBytes { raw in
+            guard let context = CGContext(
+                data: raw.baseAddress,
+                width: Self.width,
+                height: Self.height,
+                bitsPerComponent: 8,
+                bytesPerRow: Self.width,
+                space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            context.interpolationQuality = .high
+            context.draw(image, in: CGRect(x: 0, y: 0, width: Self.width, height: Self.height))
+            return true
+        }
+        guard drawn else { return nil }
+        pixels = buffer
+    }
+
+    /// True only if every small block of the screen is practically unchanged.
+    /// A single new chat line or a few pixels of scrolling already count as a change.
+    func isNearlyIdentical(to other: FrameFingerprint) -> Bool {
+        guard pixels.count == other.pixels.count else { return false }
+        let block = 6
+        for blockY in stride(from: 0, to: Self.height, by: block) {
+            for blockX in stride(from: 0, to: Self.width, by: block) {
+                var sum = 0
+                var count = 0
+                for y in blockY..<min(blockY + block, Self.height) {
+                    for x in blockX..<min(blockX + block, Self.width) {
+                        let index = y * Self.width + x
+                        sum += abs(Int(pixels[index]) - Int(other.pixels[index]))
+                        count += 1
+                    }
+                }
+                if sum > count * 3 { return false }
+            }
+        }
+        return true
+    }
+}
+
 private struct DetectionSample: Sendable {
     let time: Double
     let hits: [KeywordHit]
@@ -250,6 +299,12 @@ final class VideoProcessor: ObservableObject {
         samples.reserveCapacity(min(sampleCount, 50_000))
         var failedFrames = 0
         let startDate = Date()
+        // Speed-up: if the screen did not change since the last OCR (chat standing still),
+        // reuse that OCR result instead of running text recognition again. A full OCR is
+        // still forced at least once per second, and any visible change triggers a new scan.
+        var lastFingerprint: FrameFingerprint?
+        var lastOCRHits: [KeywordHit] = []
+        var lastOCRTime = -10.0
 
         for index in 0..<sampleCount {
             try Task.checkCancellation()
@@ -259,8 +314,18 @@ final class VideoProcessor: ObservableObject {
             var hits: [KeywordHit] = []
             do {
                 let frame = try await generator.image(at: time)
-                hits = try autoreleasepool {
-                    try detectHits(in: frame.image, matcher: matcher, languages: languages)
+                let fingerprint = FrameFingerprint(frame.image)
+                if let fingerprint, let lastFingerprint,
+                   seconds - lastOCRTime < 1.0,
+                   fingerprint.isNearlyIdentical(to: lastFingerprint) {
+                    hits = lastOCRHits
+                } else {
+                    hits = try autoreleasepool {
+                        try detectHits(in: frame.image, matcher: matcher, languages: languages)
+                    }
+                    lastOCRHits = hits
+                    lastFingerprint = fingerprint
+                    lastOCRTime = seconds
                 }
             } catch is CancellationError {
                 throw CancellationError()

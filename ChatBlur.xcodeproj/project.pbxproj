@@ -11,6 +11,7 @@
 		A10000000000000000000003 /* VideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000003 /* VideoProcessor.swift */; };
 		A10000000000000000000004 /* MovieTransferable.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* MovieTransferable.swift */; };
 		A10000000000000000000005 /* KeywordMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000007 /* KeywordMatcher.swift */; };
+		A10000000000000000000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +21,7 @@
 		B10000000000000000000004 /* MovieTransferable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovieTransferable.swift; sourceTree = "<group>"; };
 		B10000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10000000000000000000007 /* KeywordMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeywordMatcher.swift; sourceTree = "<group>"; };
+		B10000000000000000000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B10000000000000000000006 /* ChatBlur.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ChatBlur.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -45,6 +47,7 @@
 				B10000000000000000000003 /* VideoProcessor.swift */,
 				B10000000000000000000004 /* MovieTransferable.swift */,
 				B10000000000000000000007 /* KeywordMatcher.swift */,
+				B10000000000000000000008 /* Assets.xcassets */,
 				B10000000000000000000005 /* Info.plist */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +59,12 @@
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C10000000000000000000002 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
+			A10000000000000000000006 /* Assets.xcassets in Resources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E10000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
@@ -71,7 +80,7 @@
 		F10000000000000000000001 /* ChatBlur */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A20000000000000000000001 /* Build configuration list for PBXNativeTarget "ChatBlur" */;
-			buildPhases = (E10000000000000000000001 /* Sources */, C10000000000000000000001 /* Frameworks */, );
+			buildPhases = (E10000000000000000000001 /* Sources */, C10000000000000000000001 /* Frameworks */, C10000000000000000000002 /* Resources */, );
 			buildRules = ();
 			dependencies = ();
 			name = ChatBlur;
@@ -141,8 +150,9 @@
 				INFOPLIST_FILE = ChatBlur/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = de.local.chatblur;
+				MARKETING_VERSION = 0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = de.brockworks.protectyourchat;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -160,8 +170,9 @@
 				INFOPLIST_FILE = ChatBlur/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = 0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = de.local.chatblur;
+				MARKETING_VERSION = 0.3;
+				PRODUCT_BUNDLE_IDENTIFIER = de.brockworks.protectyourchat;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;

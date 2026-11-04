@@ -1,4 +1,8 @@
-# ChatBlur 0.2 – Bildschirmaufnahmen anonymisieren (iPhone XR, ohne Mac, ohne Kosten)
+# Brockworks – Protect your Chat (Projektname ChatBlur) 0.3
+
+Store-Name: „Brockworks – Protect your Chat“ · Name auf dem Homescreen: „Protect Chat“ · Bundle-ID: de.brockworks.protectyourchat · Datenschutz/Anleitung: https://brockworks.de/protect-your-chat-dsgvo/
+
+## Bildschirmaufnahmen anonymisieren (iPhone XR, ohne Mac, ohne Kosten)
 
 ChatBlur findet frei eingegebene Schlagwörter (Namen, Telefonnummern, Firmen) in Bildschirmaufnahmen – zuerst WhatsApp-Chats, auch beim Scrollen – und macht die betroffene Textzeile im exportierten Video unkenntlich. Alles läuft lokal auf dem iPhone.
 
@@ -7,8 +11,8 @@ ChatBlur findet frei eingegebene Schlagwörter (Namen, Telefonnummern, Firmen) i
 | | Stand |
 |---|---|
 | Implementiert | ja (siehe Funktionen) |
-| Mit Xcode kompiliert | **noch nicht** – passiert beim ersten Codemagic-Build |
-| Auf echtem iPhone XR getestet | **noch nicht** |
+| Mit Xcode kompiliert | 0.2: ja (Codemagic, 04.11.2026) · 0.3: beim nächsten Build |
+| Auf echtem iPhone XR getestet | 0.2: ja, ohne Abstürze; 2-min-Video ≈ 7–8 min Verarbeitung · 0.3: noch nicht |
 
 ## Funktionen
 
@@ -26,6 +30,7 @@ ChatBlur findet frei eingegebene Schlagwörter (Namen, Telefonnummern, Firmen) i
 - Fortschritt mit Restzeit, **Abbrechen**, Speicherplatzprüfung, verständliche Fehlermeldungen.
 - **Vorschau** des Ergebnisses mit Trefferliste (Zeitpunkt antippen = dorthin springen); unsichere Treffer sind orange markiert.
 - Teilen / In Dateien sichern / In Fotos sichern – erst nach Bestätigung „Ich habe das Video angesehen“.
+- Beschleunigung: Steht der Bildschirm still, wird das letzte Texterkennungs-Ergebnis wiederverwendet (spätestens jede Sekunde und bei jeder sichtbaren Änderung wird neu gescannt).
 - Temporäre Kopien werden beim nächsten Start bzw. beim Wechsel des Videos gelöscht.
 
 ## Grenzen

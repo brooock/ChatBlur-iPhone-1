@@ -52,13 +52,14 @@ struct ContentView: View {
                     processSection
                     if processor.result != nil { reviewSection }
                     privacyNote
+                    footer
                 }
                 .padding(20)
                 .frame(maxWidth: 620)
                 .frame(maxWidth: .infinity)
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("ChatBlur")
+            .navigationTitle("Protect your Chat")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .fileImporter(
@@ -411,6 +412,18 @@ struct ContentView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var footer: some View {
+        VStack(spacing: 6) {
+            Text("Brockworks – Protect your Chat")
+                .font(.caption.weight(.semibold))
+            Link("Datenschutz & Anleitung", destination: URL(string: "https://brockworks.de/protect-your-chat-dsgvo/")!)
+                .font(.caption)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
     }
 
     // MARK: Helpers
