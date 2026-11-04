@@ -1,0 +1,43 @@
+# ChatBlur – kostenloser Cloud-Build ohne Mac
+# Ergebnis: ChatBlur-unsigned.ipa (zum Signieren + Installieren mit Sideloadly unter Windows)
+# Kostenlos: Codemagic-Privatkonto hat 500 macOS-Minuten pro Monat; ein Build dauert ca. 3–6 Minuten.
+
+workflows:
+  chatblur-unsigned-ipa:
+    name: ChatBlur – unsignierte IPA für Sideloadly
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+    scripts:
+      - name: Xcode-Version anzeigen
+        script: |
+          xcodebuild -version
+          xcodebuild -list -project "$CM_BUILD_DIR/ChatBlur.xcodeproj"
+      - name: Für echtes iPhone bauen (ohne Signatur)
+        script: |
+          set -o pipefail
+          mkdir -p "$CM_BUILD_DIR/logs"
+          xcodebuild \
+            -project "$CM_BUILD_DIR/ChatBlur.xcodeproj" \
+            -target ChatBlur \
+            -configuration Release \
+            -sdk iphoneos \
+            SYMROOT="$CM_BUILD_DIR/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee "$CM_BUILD_DIR/logs/chatblur-build.log"
+      - name: IPA verpacken
+        script: |
+          set -e
+          APP="$CM_BUILD_DIR/build/Release-iphoneos/ChatBlur.app"
+          test -d "$APP"
+          rm -rf "$CM_BUILD_DIR/ipa" && mkdir -p "$CM_BUILD_DIR/ipa/Payload"
+          cp -R "$APP" "$CM_BUILD_DIR/ipa/Payload/"
+          cd "$CM_BUILD_DIR/ipa"
+          zip -qry ChatBlur-unsigned.ipa Payload
+          ls -lh ChatBlur-unsigned.ipa
+    artifacts:
+      - ipa/ChatBlur-unsigned.ipa
+      - logs/*.log

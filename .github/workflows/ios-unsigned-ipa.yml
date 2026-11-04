@@ -1,0 +1,43 @@
+# Alternative zu Codemagic: Build direkt auf GitHub (Reiter "Actions" > "Run workflow").
+# Kostenlos: öffentliche Repos unbegrenzt; private Repos haben im Free-Plan ein
+# Minutenkontingent, bei dem macOS-Minuten 10-fach zählen.
+name: ChatBlur unsigned IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode-Version
+        run: xcodebuild -version
+      - name: Für echtes iPhone bauen (ohne Signatur)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ChatBlur.xcodeproj \
+            -target ChatBlur \
+            -configuration Release \
+            -sdk iphoneos \
+            SYMROOT="$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log
+      - name: IPA verpacken
+        run: |
+          mkdir -p ipa/Payload
+          cp -R build/Release-iphoneos/ChatBlur.app ipa/Payload/
+          cd ipa && zip -qry ChatBlur-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ChatBlur-unsigned-ipa
+          path: ipa/ChatBlur-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build.log

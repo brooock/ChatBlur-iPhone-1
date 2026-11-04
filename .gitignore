@@ -1,0 +1,6 @@
+build/
+ipa/
+logs/
+*.ipa
+.DS_Store
+xcuserdata/
