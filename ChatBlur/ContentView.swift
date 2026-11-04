@@ -176,7 +176,7 @@ struct ContentView: View {
     private var keywordSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("2", "Schlagwörter festlegen")
-            Text("Ein Begriff pro Zeile oder mehrere durch Kommas trennen – z. B. Namen, Telefonnummern, Firmen.")
+            Text("Ein Begriff pro Zeile oder mehrere durch Kommas trennen – z. B. Namen, Telefonnummern, Adressen, Steuer-ID, IBAN oder Kundennummern. Leerzeichen in Nummern spielen keine Rolle.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             TextEditor(text: $keywordText)

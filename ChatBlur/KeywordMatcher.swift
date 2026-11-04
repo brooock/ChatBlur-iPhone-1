@@ -25,7 +25,10 @@ struct KeywordMatch: Sendable {
 /// * Default: whole-word / whole-phrase search ("Anna" matches "Hallo Anna!" but not "Annalena").
 /// * Optional: partial-word search ("Anna" also matches "Annalena").
 /// * Optional (default on): tolerate one OCR error for keywords with ≥ 5 letters, two for ≥ 10 letters.
-/// * Number-like keywords (e.g. phone numbers) are compared digit-by-digit, ignoring spaces, "+", "-", "/".
+/// * Number-like keywords (phone numbers, tax IDs, account numbers) are compared digit-by-digit,
+///   ignoring spaces, "+", "-", "/".
+/// * Codes mixing letters and digits (IBAN, VAT ID, customer numbers) are compared without any
+///   spaces or punctuation, so "DE89 3704 0044" also matches "DE8937040044".
 struct KeywordMatcher: Sendable {
     private struct Pattern: Sendable {
         let original: String
@@ -33,6 +36,7 @@ struct KeywordMatcher: Sendable {
         let phrase: String
         let compact: String
         let digits: String?
+        let code: String?
     }
 
     private let patterns: [Pattern]
@@ -60,12 +64,16 @@ struct KeywordMatcher: Sendable {
                 let core = String(digits.drop(while: { $0 == "0" }))
                 digitPattern = core.count >= 4 ? core : digits
             }
+            let compact = tokens.joined()
+            // Letters + at least 4 digits (e.g. IBAN "DE89 3704 …", VAT ID "DE123456789").
+            let codePattern: String? = (hasLetters && digits.count >= 4 && compact.count >= 6) ? compact : nil
             result.append(Pattern(
                 original: raw.trimmingCharacters(in: .whitespacesAndNewlines),
                 tokens: tokens,
                 phrase: phrase,
-                compact: tokens.joined(),
-                digits: digitPattern
+                compact: compact,
+                digits: digitPattern,
+                code: codePattern
             ))
         }
         patterns = result
@@ -76,11 +84,26 @@ struct KeywordMatcher: Sendable {
         guard !lineTokens.isEmpty else { return nil }
         let line = lineTokens.joined(separator: " ")
         let lineDigits = text.filter { $0.isASCII && $0.isNumber }
+        let lineCompact = lineTokens.joined()
 
         for pattern in patterns {
             if let digits = pattern.digits {
                 if lineDigits.contains(digits) {
                     return KeywordMatch(keyword: pattern.original, isFuzzy: false)
+                }
+                continue
+            }
+            if let code = pattern.code {
+                if lineCompact.contains(code) {
+                    return KeywordMatch(keyword: pattern.original, isFuzzy: false)
+                }
+                // OCR often confuses O/0, I/1, S/5 in codes – allow 1 error (2 from 14 characters).
+                if tolerateOCRErrors {
+                    let allowed = code.count >= 14 ? 2 : 1
+                    if lineCompact.count >= code.count - allowed,
+                       Self.bestSubstringDistance(pattern: code, in: lineCompact, limit: allowed) <= allowed {
+                        return KeywordMatch(keyword: pattern.original, isFuzzy: true)
+                    }
                 }
                 continue
             }

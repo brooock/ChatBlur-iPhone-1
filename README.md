@@ -23,7 +23,8 @@ ChatBlur findet frei eingegebene Schlagwörter (Namen, Telefonnummern, Firmen) i
   - Standard: **Ganzwort-/Phrasensuche** („Anna“ findet nicht „Annalena“).
   - Schalter „Auch Wortteile finden“.
   - Schalter „Lesefehler tolerieren“ (Standard an): 1 Fehler ab 5 Buchstaben, 2 ab 10. Solche Treffer gelten als unsicher.
-  - Telefonnummern werden ziffernweise verglichen („0176 123456“ findet auch „+49 176 123456“).
+  - Telefonnummern, Steuer-ID/Steuernummer, Kontonummern werden ziffernweise verglichen („0176 123456“ findet auch „+49 176 123456“).
+  - IBAN, USt-IdNr. und andere Buchstaben-Ziffern-Codes werden ohne Leerzeichen verglichen und tolerieren 1–2 OCR-Lesefehler (O/0, I/1).
 - Scrollende Chats: OCR alle 0,08–0,33 s (einstellbar), Treffer werden über die Scrollgeschwindigkeit von Bild zu Bild verfolgt, die Maske wird dazwischen flüssig mitbewegt und kurz vor/nach der Erkennung in Scrollrichtung weitergeführt.
 - Unkenntlichmachung: Pixelierung + Unschärfe, Stärke einstellbar.
 - Export als neue MP4 mit Originalton.
